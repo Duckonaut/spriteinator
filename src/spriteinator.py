@@ -1,5 +1,5 @@
 import bpy
-import os.path as fs
+import os
 from math import pi, cos, sin, tan
 
 bl_info = {
@@ -15,11 +15,10 @@ bl_info = {
     "category": "Import-Export"
 }
 
-def export_as_sprites(context, filepath, step_count, distance, angle, fov):
-    print("exporting %d directions at a %f angle to %s", step_count, angle, filepath)
+def export_as_sprites(context, filepath, step_count, distance, angle, animation_resolution, fov):
     # check if filepath is valid (we want a directory)
     # if filepath points to a file, we throw an error
-    if fs.exists(filepath) and fs.isfile(filepath):
+    if os.path.exists(filepath) and os.path.isfile(filepath):
         print("ERROR: filepath is a file, not a directory")
         return {'CANCELLED'}
 
@@ -57,10 +56,20 @@ def export_as_sprites(context, filepath, step_count, distance, angle, fov):
         # move camera
         camera.location = location
 
-        # render
-        bpy.ops.render.render(write_still=True)
-        # save
-        bpy.data.images['Render Result'].save_render(filepath + str(i) + ".png")
+        # get ready to render stuff
+        dir_name = filepath + str(i)
+        if not os.path.exists(dir_name):
+            os.mkdir(dir_name)
+
+        bpy.context.scene.render.filepath = dir_name + "/"
+
+        # render all animation frames for all animations in file
+        for action in bpy.data.actions:
+            bpy.context.scene.frame_start = int(action.frame_range[0])
+            bpy.context.scene.frame_end = int(action.frame_range[1])
+            bpy.context.scene.frame_step = animation_resolution
+            bpy.context.scene.render.filepath = dir_name + "/" + action.name + "."
+            bpy.ops.render.render(animation=True)
 
     # restore previous active camera
     bpy.context.scene.camera = previous_active_camera
@@ -115,6 +124,14 @@ class ExportAsDirectionalSprites(Operator):
         default=70.0,
     )
 
+    animation_resolution: bpy.props.IntProperty(
+        name="Animation Resolution",
+        description="Render every nth frame",
+        min=1,
+        max=1000,
+        default=1,
+    )
+
     directory: bpy.props.StringProperty(
         name="Directory Path",
         description="Directory to export to",
@@ -128,6 +145,8 @@ class ExportAsDirectionalSprites(Operator):
             blend_filepath = context.blend_data.filepath
             if not blend_filepath:
                 blend_filepath = "untitled"
+            else:
+                blend_filepath = os.path.dirname(blend_filepath)
 
             self.directory = blend_filepath
 
@@ -140,6 +159,7 @@ class ExportAsDirectionalSprites(Operator):
                                  self.step_count,
                                  self.distance,
                                  self.angle,
+                                 self.animation_resolution,
                                  self.fov)
 
 
