@@ -1,0 +1,6 @@
+# set up pyright to recognize Blender's API
+# include /usr/share/blender/3.6/scripts/modules in the search path
+[tool.pyright]
+include = ["src"]
+extraPaths = ["/usr/share/blender/3.6/scripts/modules"]
+stubPath = ["src/stubs"]
