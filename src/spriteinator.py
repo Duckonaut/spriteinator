@@ -15,7 +15,139 @@ bl_info = {
     "category": "Import-Export"
 }
 
-def export_as_sprites(context, filepath, step_count, distance, angle, animation_resolution, fov):
+gd_spriteinator_direction = """extends Resource
+class_name SpriteinatorDirection
+
+@export var frames: Array[Texture2D] = []
+"""
+
+gd_spriteinator_animation = """extends Resource
+class_name SpriteinatorAnimation
+
+@export var directions: Array[SpriteinatorDirection] = []
+"""
+
+gd_spriteinator = """extends Resource
+class_name Spriteinator
+
+@export var animations: Array[SpriteinatorAnimation] = []
+"""
+
+def uidfy(string: str) -> str:
+    uid = hash(string)
+    # convert to unsigned int
+    uid = uid & 0xffffffffffffffff
+
+    return f'{uid:0>16x}'
+
+def output_godot_resources(filepath, step_count, animation_resolution):
+    # find project root
+    project_root = filepath
+    while not os.path.exists(project_root + "/project.godot"):
+        project_root = os.path.dirname(project_root)
+        if project_root == "/":
+            print("ERROR: Could not find Godot project root")
+            return
+
+    # add script files to project/scripts/vendor/
+    vendor_path = project_root + "/scripts/vendor/"
+    if not os.path.exists(vendor_path):
+        # create directory recursively
+        os.makedirs(vendor_path, exist_ok=True)
+
+    with open(vendor_path + "SpriteinatorDirection.gd", "w") as f:
+        f.write(gd_spriteinator_direction)
+
+    with open(vendor_path + "SpriteinatorAnimation.gd", "w") as f:
+        f.write(gd_spriteinator_animation)
+
+    with open(vendor_path + "Spriteinator.gd", "w") as f:
+        f.write(gd_spriteinator)
+
+    # output resources in filepath
+    base_res_path = "res://" + os.path.relpath(filepath, project_root) + "/"
+
+    # get output directory name, used for resource name
+    output_dir_name = os.path.basename(os.path.normpath(filepath))
+
+    animation_res_uids = []
+    action_names = []
+
+    for action in bpy.data.actions:
+        direction_uids = []
+
+        for i in range(0, step_count):
+            tex_names = []
+            for j in range(int(action.frame_range[0]), int(action.frame_range[1]), animation_resolution):
+                tex_names.append(f'{i}/{action.name}.{j:04d}.png')
+
+            anim_dir_uid = uidfy(f'{output_dir_name}.{action.name}.{i}')
+
+            with open(filepath + f"/{action.name}.{i}.tres", "w") as f:
+                f.write(
+                        f'[gd_resource type="Resource" script_class="SpriteinatorDirection" load_steps={2 + len(tex_names)} format=3 uid="uid://{anim_dir_uid}"]\n\n')
+                f.write(
+                    '[ext_resource path="res://scripts/vendor/SpriteinatorDirection.gd" type="Script" id=1]\n')
+                for j in range(0, len(tex_names)):
+                    f.write(
+                        f'[ext_resource path="{base_res_path}{tex_names[j]}" type="Texture2D" id={j + 2}]\n')
+
+                f.write('\n[resource]\n')
+                f.write(f'script = ExtResource( 1 )\n')
+                f.write(f'frames = Array[Texture2D]([')
+                for j in range(0, len(tex_names)):
+                    f.write(f'ExtResource( {j + 2} )')
+                    if j < len(tex_names) - 1:
+                        f.write(", ")
+                f.write(f'])\n')
+
+            direction_uids.append(anim_dir_uid)
+
+        anim_uid = uidfy(f'{output_dir_name}.{action.name}')
+
+        with open(filepath + f"/{action.name}.tres", "w") as f:
+            f.write(
+                f'[gd_resource type="Resource" script_class="SpriteinatorAnimation" load_steps={2 + len(direction_uids)} format=3 uid="uid://{anim_uid}"]\n\n')
+            f.write(
+                '[ext_resource path="res://scripts/vendor/SpriteinatorAnimation.gd" type="Script" id=1]\n')
+            for i in range(0, len(direction_uids)):
+                f.write(
+                    f'[ext_resource path="{base_res_path}{action.name}.{i}.tres" type="Resource" id={i + 2}]\n')
+
+            f.write('\n[resource]\n')
+            f.write(f'script = ExtResource( 1 )\n')
+            f.write(f'directions = Array[Resource("res://scripts/vendor/SpriteinatorDirection.gd")]([')
+            for i in range(0, len(direction_uids)):
+                f.write(f'ExtResource( {i + 2} )')
+                if i < len(direction_uids) - 1:
+                    f.write(", ")
+            f.write(f'])\n')
+        
+        animation_res_uids.append(anim_uid)
+        action_names.append(action.name)
+
+    with open(filepath + f"/{output_dir_name}.tres", "w") as f:
+        f.write(
+            f'[gd_resource type="Resource" script_class="Spriteinator" load_steps={2 + len(animation_res_uids)} format=3 uid="uid://{uidfy(output_dir_name)}"]\n\n')
+        f.write(
+            '[ext_resource path="res://scripts/vendor/Spriteinator.gd" type="Script" id=1]\n')
+        for i in range(0, len(animation_res_uids)):
+            f.write(
+                f'[ext_resource uid="uid://{animation_res_uids[i]}" path="{base_res_path}{action_names[i]}.tres" type="Resource" id={i + 2}]\n')
+
+        f.write('\n[resource]\n')
+        f.write(f'script = ExtResource( 1 )\n')
+        f.write(f'animations = Array[Resource("res://scripts/vendor/SpriteinatorAnimation.gd")]([')
+
+        for i in range(0, len(animation_res_uids)):
+            f.write(f'ExtResource( {i + 2} )')
+            if i < len(animation_res_uids) - 1:
+                f.write(", ")
+
+        f.write(f'])\n')
+
+
+def export_as_sprites(context, filepath, step_count, distance, angle, animation_resolution, fov, godot):
     # check if filepath is valid (we want a directory)
     # if filepath points to a file, we throw an error
     if os.path.exists(filepath) and os.path.isfile(filepath):
@@ -76,6 +208,9 @@ def export_as_sprites(context, filepath, step_count, distance, angle, animation_
 
     # delete camera
     bpy.ops.object.delete()
+
+    if godot:
+        output_godot_resources(filepath, step_count, animation_resolution)
 
     return {'FINISHED'}
 
@@ -139,6 +274,12 @@ class ExportAsDirectionalSprites(Operator):
         subtype='DIR_PATH',
     )
 
+    godot: bpy.props.BoolProperty(
+        name="Godot",
+        description="Export Godot resources",
+        default=False,
+    )
+
     def invoke(self, context, _event):
         import os
         if not self.directory:
@@ -160,7 +301,8 @@ class ExportAsDirectionalSprites(Operator):
                                  self.distance,
                                  self.angle,
                                  self.animation_resolution,
-                                 self.fov)
+                                 self.fov,
+                                 self.godot)
 
 
 # Only needed if you want to add into a dynamic menu
