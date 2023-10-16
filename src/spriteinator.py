@@ -303,9 +303,16 @@ def export_as_sprites(context, filepath, step_count, distance, angle, animation_
 
         # render all animation frames for all animations in file
         for action in bpy.data.actions:
+            # set animation frame range
             bpy.context.scene.frame_start = int(action.frame_range[0])
             bpy.context.scene.frame_end = int(action.frame_range[1])
             bpy.context.scene.frame_step = animation_resolution
+
+            # set animation as current for all objects
+            for obj in bpy.data.objects:
+                if obj.animation_data is not None:
+                    obj.animation_data.action = action
+
             bpy.context.scene.render.filepath = dir_name + "/" + action.name + "."
             bpy.ops.render.render(animation=True)
 
