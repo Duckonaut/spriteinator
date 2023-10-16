@@ -5,7 +5,7 @@ from math import pi, cos, sin
 bl_info = {
     "name": "Spriteinator",
     "author": "Duckonaut",
-    "version": (1, 1, 0),
+    "version": (1, 1, 1),
     "blender": (3, 6, 0),
     "location": "File > Export",
     "description": "Export scene as directional sprites",
