@@ -162,8 +162,7 @@ def export_as_sprites(context, filepath, step_count, distance, angle, animation_
     bpy.ops.object.camera_add()
     camera = bpy.context.object
     camera.location = (0, distance, 0)
-    rel_angle = (90.0 + angle) * (pi / 180.0)
-    rad_angle = angle * (pi / 180.0)
+    rel_angle = (pi / 2 + angle)
     camera.data.lens = fov
 
     # store previous active camera
@@ -172,7 +171,7 @@ def export_as_sprites(context, filepath, step_count, distance, angle, animation_
     # set camera as active
     bpy.context.scene.camera = camera
 
-    height = distance * sin(-rad_angle)
+    height = distance * sin(-angle)
 
     for i in range(0, step_count):
         iter_angle = i * (2 * pi / step_count)
@@ -180,7 +179,7 @@ def export_as_sprites(context, filepath, step_count, distance, angle, animation_
         camera.rotation_euler = (rel_angle, 0, pi - iter_angle)
         location_flat = (sin(iter_angle), cos(iter_angle))
         # location x and y then scale by distance * cos(angle)
-        scaler = cos(-rad_angle) * distance
+        scaler = cos(-angle) * distance
         location_flat = (location_flat[0] * scaler, location_flat[1] * scaler)
         # location z scales with sin(angle)
         location = (location_flat[0], location_flat[1], height)
@@ -239,9 +238,10 @@ class ExportAsDirectionalSprites(Operator):
     angle: bpy.props.FloatProperty(
         name="Camera Angle",
         description="The angle to take the camera above the \"equator\"",
-        min=-90.0,
-        max=90.0,
-        default=-30.0
+        min=-pi/2,
+        max=pi/2,
+        default=-pi/6,
+        subtype='ANGLE',
     )
 
     distance: bpy.props.FloatProperty(
@@ -249,6 +249,7 @@ class ExportAsDirectionalSprites(Operator):
         description="The distance from world origin to spin at",
         min=0.0,
         default=10.0,
+        subtype='DISTANCE',
     )
 
     fov: bpy.props.FloatProperty(
@@ -305,12 +306,10 @@ class ExportAsDirectionalSprites(Operator):
                                  self.godot)
 
 
-# Only needed if you want to add into a dynamic menu
 def menu_func_export(self, context):
     self.layout.operator(ExportAsDirectionalSprites.bl_idname, text="Export as Directional Sprites")
 
 
-# Register and add to the "file selector" menu (required to use F3 search "Text Export Operator" for quick access).
 def register():
     bpy.utils.register_class(ExportAsDirectionalSprites)
     bpy.types.TOPBAR_MT_file_export.append(menu_func_export)
@@ -323,7 +322,3 @@ def unregister():
 
 if __name__ == "__main__":
     register()
-
-    # test call
-    bpy.ops.spriteinator.sprites('INVOKE_DEFAULT')
-
