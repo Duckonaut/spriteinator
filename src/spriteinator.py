@@ -1,6 +1,6 @@
 import bpy
 import os
-from math import pi, cos, sin, tan
+from math import pi, cos, sin
 
 bl_info = {
     "name": "Spriteinator",
